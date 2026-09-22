@@ -46,15 +46,6 @@ def prob_normal_distribution(error, variance):
     """
     return (1 / np.sqrt(2 * np.pi * variance)) * np.exp(-0.5 * error**2 / variance)
 
-def sample_triangular_distribution(variance):
-    support = np.sqrt(variance)
-
-    return rng_gen.triangular(
-        left = -support,
-        mode=0.0,
-        scale=np.sqrt(variance)
-    )
-
 def sample_motion_model_velocity(u_t, x_prev, alpha, dt):
     x, y, theta = x_prev
     v, omega = u_t
