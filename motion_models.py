@@ -2,6 +2,7 @@ import math
 import random
 
 
+
 def motion_model_velocity(x_t, x_prev, u_t, alpha):
     """
     Compute the likelihood of a motion from x_prev to x_t under a velocity motion model.
