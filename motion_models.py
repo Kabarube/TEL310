@@ -4,7 +4,6 @@ import random
 def motion_model_velocity(x_t, x_prev, u_t, alpha, dt):
     """Algorithm for computing p(x_t | u_t, x_t-1) based on velocity information
     """
-
     x, y, theta = x_t
     xp, yp, thetap = x_prev
     v, omega = u_t
@@ -20,8 +19,14 @@ def motion_model_velocity(x_t, x_prev, u_t, alpha, dt):
     y_star = 0.5 * (y + yp) + mu * (xp - x)
 
     # Radius
-    r_star = np.sqrt((x-x_star)**2 + (y-y_star)**2)
-    dtheta = np.arctan2(yp - y_star, xp - x_star) - np.arctan2(y - yp, x - x_star)
+    r_star = np.sqrt(
+        (x-x_star)**2 +
+        (y-y_star)**2
+    )
+
+    dtheta = np.arctan2(
+        yp - y_star,
+        xp - x_star) - np.arctan2(y - yp, x - x_star)
 
     # Velocities obtained from the hypothesis
     omega_hat = dtheta / dt
@@ -61,7 +66,6 @@ def sample_motion_model_velocity(u_t, x_prev, alpha, dt):
 
     # Radius
     r_hat = v_hat / omega_hat
-
     theta_hat = theta + omega_hat * dt
 
     # Sample coordinates
@@ -90,10 +94,24 @@ def motion_model_odometry(x_prev, x_t, x_pred, x_bar_prime, alpha):
     a1, a2, a3, a4, a5, a6 = alpha                          # Specific robot error parameters
 
     sigma_rot1 = np.atan2(y_pred_new - y_pred_old, x_pred_new - x_pred_old) - theta_pred_old
-    sigma_trans = np.sqrt((x_pred_new - x_pred_old)**2 + (y_new - y_old)**2)
+
+    sigma_trans = np.sqrt(
+        (x_pred_new - x_pred_old)**2 +
+        (y_pred_new - y_pred_old)**2
+    )
+
     sigma_rot2 = theta_pred_new - theta_pred_old - sigma_rot1
-    sigma_hat_rot1 = np.atan2(y_new - y_old, x_old) - theta_old
-    sigma_hat_trans = np.sqrt((x_new - x_old)**2 + (y_new - y_old)**2)
+
+    sigma_hat_rot1 = np.atan2(
+        y_new - y_old,
+        x_new - x_old
+    ) - theta_old
+
+    sigma_hat_trans = np.sqrt(
+        (x_new - x_old)**2 +
+        (y_new - y_old)**2
+    )
+
     sigma_hat_rot2 = theta_new - theta_old - sigma_hat_rot1
 
     p1_error = sigma_rot1 - sigma_hat_rot1
@@ -118,8 +136,14 @@ def sample_motion_model_odometry(u_t, x_prev, alpha):
     a1, a2, a3, a4, a5, a6 = alpha
 
     # Odometry components
-    sigma_rot1 = np.atan2(y_pred_current - y_pred_old, x_bar_current - x_bar_old) - theta_pred_old
-    sigma_trans = np.sqrt((x_pred_current - x_pred_old)**2 + (y_pred_current - y_pred_old)**2)
+    sigma_rot1 = np.atan2(
+        y_pred_current - y_pred_old,
+        x_pred_current - x_pred_old) - theta_pred_old
+
+    sigma_trans = np.sqrt(
+        (x_pred_current - x_pred_old)**2 +
+        (y_pred_current - y_pred_old)**2
+    )
     sigma_rot2 = theta_pred_current - theta_pred_old - sigma_rot1
 
     # Calculate variance
