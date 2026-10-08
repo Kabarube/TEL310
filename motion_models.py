@@ -1,3 +1,10 @@
+# =============================================================================
+# Author:       Kai Ruben Hamlander Enerhaugen
+# Email:        kai.r.h.enerhaugen@nmbu.no
+# Created:      2026-10-08
+# Description:  TEL310 Labwork 1 - Motion model functions
+# =============================================================================
+
 import numpy as np
 
 def motion_model_velocity(x_t, x_prev, u_t, alpha, dt):
@@ -19,6 +26,10 @@ def motion_model_velocity(x_t, x_prev, u_t, alpha, dt):
         - (xp - x) * np.sin(thetap)
     )
 
+    # Avoid singularity for straight-line motion
+    if np.isclose(denominator, 0.0):
+        return 0.0
+    
     mu = 0.5 * numerator / denominator
 
     # Center of rotation
@@ -111,11 +122,11 @@ def sample_triangular_distribution(variance):
         np.random.uniform(-b, b, size=2).sum()
     )
 
-def motion_model_odometry(x_prev, x_t, x_pred, x_bar_prime, alpha):
+def motion_model_odometry(x_prev, x_t, x_bar_prev, x_bar_t, alpha):
     x_old, y_old, theta_old = x_prev                        # Previous pose
     x_new, y_new, theta_new = x_t                           # Current pose
-    x_pred_old, y_pred_old, theta_pred_old = x_pred         # Previous predicted pose
-    x_pred_new, y_pred_new, theta_pred_new = x_bar_prime    # New predicted pose 
+    x_pred_old, y_pred_old, theta_pred_old = x_bar_prev         # Previous predicted pose
+    x_pred_new, y_pred_new, theta_pred_new = x_bar_t    # New predicted pose 
     a1, a2, a3, a4, a5, a6 = alpha                          # Specific robot error parameters
 
     sigma_rot1 = np.atan2(y_pred_new - y_pred_old, x_pred_new - x_pred_old) - theta_pred_old

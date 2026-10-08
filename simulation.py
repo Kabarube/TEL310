@@ -1,7 +1,13 @@
+# =============================================================================
+# Author:       Kai Ruben Hamlander Enerhaugen
+# Email:        kai.r.h.enerhaugen@nmbu.no
+# Created:      2026-10-08
+# Description:  TEL310 Labwork 1 - Motion model simulation
+# =============================================================================
+
 import numpy as np
 import matplotlib.pyplot as plt
 from motion_models import sample_motion_model_velocity, motion_model_velocity, sample_motion_model_odometry, motion_model_odometry
-
 
 # Motion-model noise parameters
 alpha_vel = (
@@ -18,11 +24,8 @@ initial_pose = (0.0, 0.0, 0.0)  # Initial robot pose: x, y, theta
 control = (1.0, 0.5)            # velocity, angular velocity
 dt = 1.0 
 
-
 # Simulation parameters
 number_of_particles = 500
-number_of_steps = 40
-
 
 # Particle generator
 def generate_particles(sampling_function, number_of_particles, *args):
@@ -40,7 +43,6 @@ def generate_particles(sampling_function, number_of_particles, *args):
         sampling_function(*args)
         for _ in range(number_of_particles)
     ])
-
 
 # =================================
 # Sample motion velocity simulation
@@ -73,18 +75,20 @@ y_expected = y + r * (
     np.cos(theta) - np.cos(theta_expected)
 )
 
-
 # ============================
 # Motion model velocity simulation
 # - Finding probability of different candidate poses
 # ============================
 
-
 # Building a grid of candidate poses
 x_values = np.linspace(0.0, 1.5, 100)
 y_values = np.linspace(-0.3, 0.8, 100)
 
-theta_candidate = initial_pose[2] + control[1] * dt
+theta_initial = initial_pose[2]
+omega = control[1]
+
+delta_theta = omega * dt
+theta_candidate = theta_initial + delta_theta
 
 likelihood = np.zeros(
     (len(y_values), len(x_values))
@@ -116,7 +120,7 @@ for iy, y in enumerate(y_values):
 # ================================
 
 # Odometry parameters
-# - In this case odometry sensor says the robot moved from x_t-1=(0, 0, 0) to xt=(0.5, 0.0, 0.4)
+# - In this case odometry sensor says the robot moved from x_t-1 to xt
 odometry = (
     (0.0, 0.0, 0.0),
     (0.5, 0.7, 0.4),
@@ -264,8 +268,6 @@ ax[1, 1].scatter(
     label='Initial pose'
 )
 
-
-
 fig.colorbar(
     im_odom,
     ax=ax[1, 1],
@@ -280,6 +282,5 @@ ax[0, 0].legend()
 ax[0, 1].legend()
 ax[1, 0].legend()
 ax[1, 1].legend()
-
 
 plt.show()
