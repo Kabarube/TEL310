@@ -131,7 +131,7 @@ def main():
         sim.lidar_max_range
     )
 
-    params = BeamModelParameters()
+    params = BeamModelParams()
 
     log_likelihood = beam_range_finder_model(
         measured, expected, sim.lidar_max_range, params
