@@ -229,7 +229,8 @@ class Simulator:
         t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / den
         u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / den
 
-        if 0 < t < 1 and 0 < u:
+        # Had to fix a condition here, fixing the lidar measurements dependence on what direction the walls were drawn.
+        if 0 <= t <= 1 and 0 <= u <= 1:
             intersection_point = np.array([x1 + t * (x2 - x1), y1 + t * (y2 - y1)])
             return intersection_point
         
