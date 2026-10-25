@@ -7,7 +7,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
-from motion_models import sample_motion_model_velocity, motion_model_velocity, sample_motion_model_odometry, motion_model_odometry
+from lab1.motion_models import sample_motion_model_velocity, motion_model_velocity, sample_motion_model_odometry, motion_model_odometry
 
 # Motion-model noise parameters
 alpha_vel = (
