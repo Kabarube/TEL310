@@ -21,6 +21,22 @@ import cv2
 
 class Robot:
     def __init__(self, initial_pose=np.zeros(3), a_max=0.5, alpha_max=0.5, dt=0.1, radius=0.1):
+        """
+        Initialize a unicycle robot with zero actual and desired velocities.
+
+        Parameters
+        ----------
+        initial_pose : np.ndarray of shape (3,), optional
+            Initial [x, y, theta], with theta in radians. Stored without copying.
+        a_max : float, optional
+            Maximum linear acceleration in metres per second squared.
+        alpha_max : float, optional
+            Maximum angular acceleration in radians per second squared.
+        dt : float, optional
+            Integration time step in seconds.
+        radius : float, optional
+            Robot collision radius in metres.
+        """
         self.pose = initial_pose
         self.v = 0.0
         self.w = 0.0
@@ -32,12 +48,15 @@ class Robot:
         self.radius = radius
 
     def get_pose(self):
+        """Return the current [x, y, theta] pose array without copying it."""
         return self.pose
     
     def get_vel(self):
+        """Return [linear, angular] velocity in metres/s and radians/s."""
         return [float(self.v), float(self.w)]
 
     def update_speed(self):
+        """Move actual velocities toward desired values within acceleration limits."""
         dv = np.clip(self.des_v - self.v, -self.a_max * self.dt, self.a_max * self.dt)
         dw = np.clip(self.des_w - self.w, -self.alpha_max * self.dt, self.alpha_max * self.dt)
         
@@ -45,6 +64,15 @@ class Robot:
         self.w += dw
         
     def update_pose(self):
+        """
+        Predict the next pose using current velocities and forward Euler integration.
+
+        Returns
+        -------
+        np.ndarray of shape (3,)
+            Predicted [x, y, theta]. The stored pose is unchanged and theta
+            is not wrapped.
+        """
         x, y, theta = self.pose
         
         x_new = x + self.v * np.cos(theta) * self.dt
@@ -55,6 +83,18 @@ class Robot:
 
 class Camera:
     def __init__(self, width=640, height=480, meters_per_pixel=0.01):
+        """
+        Initialize a camera with the world origin at the image center.
+
+        Parameters
+        ----------
+        width : int, optional
+            Image width in pixels. Default is 640.
+        height : int, optional
+            Image height in pixels. Default is 480.
+        meters_per_pixel : float, optional
+            World distance represented by one pixel. Default is 0.01.
+        """
         self.width = width
         self.height = height
         self.meters_per_pixel = meters_per_pixel
@@ -63,6 +103,20 @@ class Camera:
         self.image_center_y = self.height / 2
 
     def project_point(self, point_world):
+        """
+        Project a world point to integer image coordinates.
+
+        Parameters
+        ----------
+        point_world : array_like
+            World coordinates whose first two entries are x and y in metres.
+
+        Returns
+        -------
+        tuple of int
+            Pixel coordinates (u, v), with positive world y pointing upward.
+            Coordinates are not clipped to the image boundaries.
+        """
         x_world, y_world = point_world[0], point_world[1]
         
         u = self.image_center_x + x_world / self.meters_per_pixel
@@ -72,10 +126,37 @@ class Camera:
 
 class Renderer:
     def __init__(self, width, height):
+        """
+        Initialize the renderer dimensions.
+
+        Parameters
+        ----------
+        width : int
+            Image width in pixels.
+        height : int
+            Image height in pixels.
+        """
         self.width = width
         self.height = height
 
     def render_image(self, objects):
+        """
+        Render lines, circles, and robots on a white BGR image.
+
+        Parameters
+        ----------
+        objects : iterable of tuple
+            Pairs of object type and drawing data. Line data is
+            (p1, p2, color, thickness), circle data is
+            (center, radius, color, thickness), and robot data is
+            (center, radius, color, theta). Positions and radii are in
+            pixels, colors are RGB, and theta is in radians.
+
+        Returns
+        -------
+        np.ndarray of shape (height, width, 3)
+            Rendered uint8 image in OpenCV's BGR channel order.
+        """
         image = np.full((self.height, self.width, 3), (255, 255, 255), dtype=np.uint8)
         
         for obj_type, data in objects:
@@ -97,6 +178,22 @@ class Renderer:
 
 class Simulator:
     def __init__(self, robot_init_pose, cam_params, time_step, world_map):
+        """
+        Initialize the robot, camera, renderer, map, and default LiDAR settings.
+
+        Parameters
+        ----------
+        robot_init_pose : dict
+            Keyword arguments passed to Robot, including initial_pose.
+        cam_params : dict
+            Keyword arguments passed to Camera.
+        time_step : float
+            Simulator time step in seconds. The robot uses its own dt argument.
+        world_map : dict
+            Map stored by reference, with "lines" and "circles" lists.
+            Walls have "p1", "p2", and "color" entries; circles have
+            "center", "radius", and "color" entries.
+        """
         self.camera = Camera(**cam_params)
         self.robot = Robot(**robot_init_pose)
         self.renderer = Renderer(self.camera.width, self.camera.height)
@@ -109,6 +206,15 @@ class Simulator:
         self.world_map = world_map
 
     def _create_world_map(self):
+        """
+        Build an example square map with four circular obstacles.
+
+        Returns
+        -------
+        dict
+            New map with "lines" and "circles" lists. Does not replace
+            the simulator's current world_map.
+        """
         world_map = {'lines': [], 'circles': []}
         
         walls = [
@@ -135,6 +241,7 @@ class Simulator:
         return world_map
 
     def _get_render_data(self):
+        """Return drawing tuples for the map and robot in pixel coordinates."""
         render_data = []
 
         for wall in self.world_map['lines']:
@@ -157,10 +264,48 @@ class Simulator:
         return render_data
     
     def _is_colliding_with_circle(self, robot_pos, robot_radius, circle_pos, circle_radius):
+        """
+        Check whether the robot and a circular obstacle strictly overlap.
+
+        Parameters
+        ----------
+        robot_pos : np.ndarray of shape (2,)
+            Robot center in world coordinates.
+        robot_radius : float
+            Robot radius.
+        circle_pos : np.ndarray of shape (2,)
+            Obstacle center in world coordinates.
+        circle_radius : float
+            Obstacle radius.
+
+        Returns
+        -------
+        bool
+            Whether center distance is less than the sum of the radii.
+            Tangential contact is excluded.
+        """
         distance = np.linalg.norm(robot_pos - circle_pos)
         return distance < (robot_radius + circle_radius)
 
     def _is_colliding_with_line(self, robot_pos, robot_radius, p1, p2):
+        """
+        Check whether a wall segment enters the robot's circular footprint.
+
+        Parameters
+        ----------
+        robot_pos : np.ndarray of shape (2,)
+            Robot center in world coordinates.
+        robot_radius : float
+            Robot radius.
+        p1, p2 : np.ndarray of shape (2,)
+            Wall segment endpoints in world coordinates.
+
+        Returns
+        -------
+        bool
+            Whether the shortest distance to the segment is strictly less
+            than robot_radius. Coincident endpoints are treated as a point.
+        """
         line_vec = p2 - p1
         p_to_p1_vec = robot_pos - p1
         
@@ -178,6 +323,19 @@ class Simulator:
         return distance < robot_radius
 
     def _check_collision(self, next_robot_pose):
+        """
+        Check a candidate robot position against all mapped walls and circles.
+
+        Parameters
+        ----------
+        next_robot_pose : array_like of shape (3,)
+            Candidate [x, y, theta]; only x and y are used.
+
+        Returns
+        -------
+        bool
+            Whether an obstacle strictly overlaps the robot's footprint.
+        """
         next_pos = next_robot_pose[:2]
         
         for circle in self.world_map['circles']:
@@ -191,6 +349,29 @@ class Simulator:
         return False
     
     def _get_line_circle_intersection(self, ray_start, ray_direction, circle_center, circle_radius, max_dist):
+        """
+        Find the nearest forward intersection of a ray with a circle boundary.
+
+        Parameters
+        ----------
+        ray_start : np.ndarray of shape (2,)
+            Ray origin in world coordinates.
+        ray_direction : np.ndarray of shape (2,)
+            Nonzero direction vector. Use a unit vector so max_dist is a
+            physical distance.
+        circle_center : np.ndarray of shape (2,)
+            Circle center in world coordinates.
+        circle_radius : float
+            Circle radius.
+        max_dist : float
+            Largest allowed ray parameter along ray_direction.
+
+        Returns
+        -------
+        np.ndarray of shape (2,) or None
+            Closest intersection with ray parameter in (0, max_dist], or
+            None if there is no such intersection.
+        """
         m = ray_direction
         c = ray_start - circle_center
         
@@ -217,6 +398,22 @@ class Simulator:
         return None    
     
     def _get_line_line_intersection(self, p1, p2, p3, p4):
+        """
+        Find the intersection of two finite line segments.
+
+        Parameters
+        ----------
+        p1, p2 : array_like of shape (2,)
+            Endpoints of the first segment.
+        p3, p4 : array_like of shape (2,)
+            Endpoints of the second segment.
+
+        Returns
+        -------
+        np.ndarray of shape (2,) or None
+            Intersection including endpoint contact, or None for disjoint,
+            parallel, or collinear segments.
+        """
         x1, y1 = p1
         x2, y2 = p2
         x3, y3 = p3
@@ -237,6 +434,17 @@ class Simulator:
         return None
     
     def get_lidar(self):
+        """
+        Cast the configured LiDAR rays against mapped walls and circles.
+
+        Returns
+        -------
+        list of dict
+            One entry per ray that hits an obstacle within lidar_max_range,
+            in lidar_angles order. Entries contain relative "angle" in
+            radians, "distance" in metres, and the obstacle's RGB "color".
+            Rays without a hit are omitted.
+        """
         robot_pos = self.robot.pose[:2]
         robot_theta = self.robot.pose[2]
         
@@ -279,6 +487,15 @@ class Simulator:
         return lidar_readings
     
     def get_range(self):
+        """
+        Measure the ideal obstacle range along the robot's heading.
+
+        Returns
+        -------
+        float
+            Distance to the closest mapped wall or circle ahead, or
+            lidar_max_range if there is no hit within range.
+        """
         robot_pos = self.robot.pose[:2]
         robot_theta = self.robot.pose[2]
         
@@ -310,6 +527,26 @@ class Simulator:
             return self.lidar_max_range
 
     def step(self, des_v, des_w):
+        """
+        Update robot velocities, attempt a pose update, and render the scene.
+
+        Parameters
+        ----------
+        des_v : float
+            Desired linear velocity in metres per second.
+        des_w : float
+            Desired angular velocity in radians per second.
+
+        Returns
+        -------
+        np.ndarray
+            Rendered uint8 BGR image of the map and resulting robot pose.
+
+        Notes
+        -----
+        If the candidate pose collides, the pose is unchanged and actual
+        velocities are reset to zero. Desired velocities remain stored.
+        """
         self.robot.des_v = des_v
         self.robot.des_w = des_w
         
@@ -330,6 +567,25 @@ class Simulator:
         return rendered_img
     
 def render_lidar_data(lidar_data, max_range, resolution):
+    """
+    Render a robot-centered LiDAR view with forward pointing upward.
+
+    Parameters
+    ----------
+    lidar_data : iterable of dict
+        Readings with "distance" in metres, relative "angle" in radians,
+        and RGB "color" entries.
+    max_range : float
+        Sensor range used to size the square image.
+    resolution : float
+        Positive number of metres represented by one pixel.
+
+    Returns
+    -------
+    np.ndarray
+        Square uint8 BGR image with side length
+        int(2.1 * max_range / resolution), showing readings and the robot.
+    """
     img_width, img_height = int(2.1*max_range/resolution), int(2.1*max_range/resolution)
     image = np.full((img_height, img_width, 3), (255, 255, 255), dtype=np.uint8)
     center = (img_width // 2, img_height // 2)
