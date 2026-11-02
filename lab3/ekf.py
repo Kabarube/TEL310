@@ -1,12 +1,4 @@
 import numpy as np
-#from lab1.motion_models import prob_normal_distribution
-#from SET_Prob import Simulator
-
-def EKF_localisation_known_correspondences(mu:np.ndarray, cov, u, z, c, map):
-    x_prev, y_prev, theta_prev = None
-    pass
-
-
 
 def prediction_step(
         mu: np.ndarray,
@@ -92,27 +84,6 @@ def prediction_step(
 
     return mu_pred, sigma_pred
 
-
-# # Test prediction step
-# mu = np.array([0.0, 0.0, 0.0])
-
-# Sigma = np.diag([0.01, 0.01, 0.01])
-
-# u = np.array([1.0, 0.5])
-
-# alpha = (0.01, 0.01, 0.02, 0.02)
-
-# dt = 1.0
-
-# print(prediction_step(
-#     mu,
-#     u,
-#     Sigma,
-#     alpha,
-#     dt
-# ))
-
-
 def correction_step(
         mu_pred: np.ndarray,
         sigma_pred: np.ndarray,
@@ -165,48 +136,76 @@ def correction_step(
 
     return mu, sigma
 
+def associate_landmark(
+    mu_pred: np.ndarray,
+    sigma_pred: np.ndarray,
+    z: np.ndarray,
+    landmarks: dict,
+    Q: np.ndarray
+) -> int:
+    """Choose the most likely landmark for an observation."""
+
+    x, y, theta = mu_pred
+
+    best_id = None
+    best_log_likelihood = -np.inf
+
+    for landmark_id, landmark in landmarks.items():
+        mx, my, signature = landmark
+
+        dx = mx - x
+        dy = my - y
+        q = dx**2 + dy**2
+
+        if q <= 1e-12:
+            continue
+
+        # Expected observation for candidate landmark
+        z_expected = np.array([
+            np.sqrt(q),
+            wrap_angle(np.arctan2(dy, dx) - theta),
+            signature
+        ])
+
+        # Measurement Jacobian
+        H = np.array([
+            [-dx / np.sqrt(q), -dy / np.sqrt(q), 0.0],
+            [dy / q,          -dx / q,         -1.0],
+            [0.0,              0.0,             0.0]
+        ])
+
+        # Innovation covariance
+        S = H @ sigma_pred @ H.T + Q
+
+        # Innovation
+        innovation = z - z_expected
+        innovation[1] = wrap_angle(innovation[1])
+
+        # Gaussian log-likelihood
+        sign, logdet = np.linalg.slogdet(S)
+
+        if sign <= 0:
+            continue
+
+        mahalanobis_sq = innovation @ np.linalg.solve(
+            S, innovation
+        )
+
+        log_likelihood = -0.5 * (
+            mahalanobis_sq + logdet + len(z) * np.log(2 * np.pi)
+        )
+
+        if log_likelihood > best_log_likelihood:
+            best_log_likelihood = log_likelihood
+            best_id = landmark_id
+
+    if best_id is None:
+        raise ValueError("No valid landmark association found")
+
+    return best_id
+
+
 def wrap_angle(angle):
     """Wrap an angle to the range [-pi, pi]."""
     return (angle + np.pi) % (2 * np.pi) - np.pi
 
-
-
-#TEST CORRECTION
-mu_pred = np.array([0.0, 0.0, 0.0])
-
-sigma_pred = np.diag([
-    0.2**2,
-    0.2**2,
-    np.deg2rad(10)**2
-])
-
-# Known landmark at (3, 2) with signature 1
-landmark = np.array([3.0, 2.0, 1.0])
-
-# Simulated measurement
-z = np.array([
-    3.5,
-    0.65,
-    1.0
-])
-
-Q = np.diag([
-    0.1**2,
-    0.05**2,
-    0.1**2
-])
-
-mu, sigma = correction_step(
-    mu_pred,
-    sigma_pred,
-    z,
-    landmark,
-    Q
-)
-
-print("Predicted pose:", mu_pred)
-print("Corrected pose:", mu)
-print("Predicted covariance:\n", sigma_pred)
-print("Corrected covariance:\n", sigma, "\n")
-print(np.diag(sigma_pred))
-print(np.diag(sigma))
