@@ -1,12 +1,13 @@
 import numpy as np
 
+
 def prediction_step(
         mu: np.ndarray,
         u: np.ndarray,
         sigma: np.ndarray,
         alpha: np.ndarray,
         dt: float
-    ) -> np.ndarray:
+    ) -> tuple[np.ndarray, np.ndarray]:
     """Predict the robot pose and covariance using a velocity motion model.
 
     Args:
@@ -90,7 +91,19 @@ def correction_step(
         z: np.ndarray,
         landmark: np.ndarray,
         Q: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, float]:
+    """Correct the predicted pose and covariance using one landmark observation.
+
+    Args:
+        mu_pred (np.ndarray): Predicted robot pose [x, y, theta].
+        sigma_pred (np.ndarray): Predicted pose covariance.
+        z (np.ndarray): Observed [range, bearing, signature].
+        landmark (np.ndarray): Known landmark data [x, y, signature].
+        Q (np.ndarray): Measurement noise covariance.
+
+    Returns:
+        tuple: Corrected pose, corrected covariance, and measurement log-likelihood.
+    """
 
     x, y, theta = mu_pred
     mx, my, ms = landmark
@@ -127,6 +140,12 @@ def correction_step(
 
     innovation[1] = wrap_angle(innovation[1])
 
+    # Measurement log-likelihood
+    log_pz = gaussian_log_likelihood(
+        innovation,
+        S
+    )
+
     # Correct mean
     mu = mu_pred + K @ innovation
 
@@ -134,7 +153,7 @@ def correction_step(
     I = np.eye(3)
     sigma = (I - K @ H) @ sigma_pred
 
-    return mu, sigma
+    return mu, sigma, log_pz
 
 def associate_landmark(
     mu_pred: np.ndarray,
@@ -143,7 +162,21 @@ def associate_landmark(
     landmarks: dict,
     Q: np.ndarray
 ) -> int:
-    """Choose the most likely landmark for an observation."""
+    """Choose the most likely landmark for an observation.
+
+    Args:
+        mu_pred (np.ndarray): Predicted robot pose [x, y, theta].
+        sigma_pred (np.ndarray): Predicted pose covariance.
+        z (np.ndarray): Observed [range, bearing, signature].
+        landmarks (dict): Landmark IDs mapped to [x, y, signature] arrays.
+        Q (np.ndarray): Measurement noise covariance.
+
+    Returns:
+        int: ID of the landmark with the highest measurement likelihood.
+
+    Raises:
+        ValueError: If no valid landmark association is found.
+    """
 
     x, y, theta = mu_pred
 
@@ -204,8 +237,51 @@ def associate_landmark(
 
     return best_id
 
+def gaussian_log_likelihood(
+    innovation: np.ndarray,
+    S: np.ndarray
+) -> float:
+    """Calculate the Gaussian log-likelihood of a measurement innovation.
 
-def wrap_angle(angle):
-    """Wrap an angle to the range [-pi, pi]."""
+    Args:
+        innovation (np.ndarray): Difference between observed and expected measurements.
+        S (np.ndarray): Innovation covariance matrix.
+
+    Returns:
+        float: Log-likelihood of the innovation.
+
+    Raises:
+        ValueError: If the innovation covariance has a nonpositive determinant.
+    """
+
+    n = len(innovation)
+
+    sign, logdet = np.linalg.slogdet(S)
+
+    if sign <= 0:
+        raise ValueError("Innovation covariance must be positive definite")
+
+    mahalanobis_sq = innovation @ np.linalg.solve(
+        S, innovation
+    )
+
+    log_likelihood = -0.5 * (
+        mahalanobis_sq
+        + logdet
+        + n * np.log(2 * np.pi)
+    )
+
+    return float(log_likelihood)
+
+
+def wrap_angle(angle: float) -> float:
+    """Wrap an angle to the range [-pi, pi).
+
+    Args:
+        angle (float): Angle in radians.
+
+    Returns:
+        float: Equivalent angle in radians between -pi (included) and pi (excluded).
+    """
     return (angle + np.pi) % (2 * np.pi) - np.pi
 
